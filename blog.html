@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%2300043F'/%3E%3Ccircle cx='16' cy='16' r='6' fill='%23EFBF04'/%3E%3C/svg%3E">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Insights — Zinara Digital | Revenue Systems, AI &amp; Digital Marketing Kenya</title>
+<meta name="description" content="Articles on revenue infrastructure, digital marketing systems, and AI automation — written for business owners in East Africa who want to understand the problem before buying the solution.">
+<link rel="canonical" href="https://zinara.co.ke/blog.html">
+<meta property="og:title" content="Insights — Zinara Digital">
+<meta property="og:description" content="Diagnosing the failures most businesses ignore. Revenue systems, AI automation, and digital marketing for East African businesses.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<style>
+.blog-filter {
+  display: flex;
+  gap: .5rem;
+  flex-wrap: wrap;
+  margin-bottom: 2.5rem;
+}
+.filter-btn {
+  font-family: var(--fb);
+  font-size: .78rem;
+  font-weight: 500;
+  padding: 7px 16px;
+  border-radius: 20px;
+  border: 1.5px solid var(--border);
+  color: var(--ink-3);
+  background: var(--white);
+  cursor: pointer;
+  transition: all .18s;
+}
+.filter-btn.active,
+.filter-btn:hover {
+  background: var(--navy);
+  border-color: var(--navy);
+  color: var(--white);
+}
+
+.blog-grid-full {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+.blog-card-full {
+  background: var(--white);
+  display: flex;
+  flex-direction: column;
+  transition: background .18s;
+}
+.blog-card-full:hover { background: #F5F6FC; }
+.blog-card-full:hover .blog-read { color: var(--navy); }
+
+.blog-card-img {
+  aspect-ratio: 16/9;
+  overflow: hidden;
+  background: var(--cloud);
+}
+.blog-card-img img { width: 100%; height: 100%; object-fit: cover; transition: transform .3s; }
+.blog-card-full:hover .blog-card-img img { transform: scale(1.03); }
+
+.blog-card-body { padding: 1.75rem; display: flex; flex-direction: column; flex: 1; }
+.blog-card-meta { display: flex; align-items: center; gap: .75rem; margin-bottom: .75rem; }
+.blog-card-cat { font-size: .67rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--gold-d); }
+.blog-card-date { font-size: .72rem; color: var(--ink-3); }
+.blog-card-title { font-family: var(--fh); font-size: 1.15rem; font-weight: 600; color: var(--navy); line-height: 1.3; margin-bottom: .65rem; }
+.blog-card-excerpt { font-size: .86rem; font-weight: 300; color: var(--ink-2); line-height: 1.68; flex: 1; margin-bottom: 1.25rem; }
+.blog-card-readtime { font-size: .72rem; color: var(--ink-3); margin-bottom: 1rem; }
+
+/* Featured post */
+.blog-featured {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+  margin-bottom: 3rem;
+}
+.blog-featured-img {
+  aspect-ratio: auto;
+  min-height: 340px;
+  overflow: hidden;
+  background: var(--cloud);
+}
+.blog-featured-img img { width: 100%; height: 100%; object-fit: cover; }
+.blog-featured-body {
+  background: var(--white);
+  padding: 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.blog-featured-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .68rem;
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--gold-d);
+  margin-bottom: 1rem;
+}
+.blog-featured-label::before { content: ''; width: 16px; height: 1.5px; background: var(--gold); display: block; }
+.blog-featured-title { font-family: var(--fh); font-size: clamp(1.4rem, 2.5vw, 2rem); font-weight: 600; color: var(--navy); line-height: 1.2; margin-bottom: 1rem; }
+.blog-featured-excerpt { font-size: .9rem; font-weight: 300; color: var(--ink-2); line-height: 1.75; margin-bottom: 1.5rem; }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="nav-logo" href="index.html"><span class="nav-dot"></span>Zinara Digital</a>
+    <nav class="nav-menu">
+      <a href="services.html">Services</a>
+      <a href="index.html#why">Why Zinara</a>
+      <a href="blog.html" class="active">Blog</a>
+      <a href="about.html">About</a>
+      <a href="audit.html" class="nav-cta">Request a Revenue Audit →</a>
+    </nav>
+    <button class="nav-toggle" id="navToggle" aria-label="Open menu" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</nav>
+<div class="nav-mobile" id="navMobile">
+  <a href="services.html">Services</a>
+  <a href="index.html#why">Why Zinara</a>
+  <a href="blog.html" class="active">Blog</a>
+  <a href="about.html">About</a>
+  <a href="audit.html" class="nav-cta">Request a Revenue Audit →</a>
+</div>
+
+
+<!-- PAGE HERO -->
+<section class="page-hero">
+  <div class="page-hero-inner wrap">
+    <div class="eyebrow light reveal">Zinara Insights</div>
+    <h1 class="page-hero-title reveal d1">Diagnosing the failures<br>most businesses ignore.</h1>
+    <p class="lead light reveal d2">Articles on revenue infrastructure, digital systems, and AI automation — written for business owners who want to understand the problem before buying the solution.</p>
+  </div>
+</section>
+
+
+<!-- BLOG CONTENT -->
+<section class="section white">
+  <div class="wrap">
+
+    <!-- Featured post -->
+    <div class="eyebrow reveal">Featured</div>
+    <div class="blog-featured reveal d1">
+      <div class="blog-featured-img">
+        <img data-fallback-bg="var(--cloud)"
+          src="images/blog-featured.jpg"
+          alt="Revenue system failure diagnosis"
+          loading="lazy"
+        >
+      </div>
+      <div class="blog-featured-body">
+        <div class="blog-featured-label">Revenue System</div>
+        <div class="blog-featured-title">Why Your Leads Don't Convert — And It Has Nothing to Do With Your Product</div>
+        <div class="blog-featured-excerpt">The failure is almost never the lead source. It is the handling infrastructure that receives the lead. Most businesses in East Africa diagnose a marketing problem when the real failure is operational — the lead arrives and there is no system to handle it. Here is how to identify the exact failure point in your business.</div>
+        <div class="blog-card-readtime">8 min read · Revenue System · January 2026</div>
+        <a href="#" class="btn-navy" style="align-self:flex-start;">
+          Read the diagnosis <span class="arr">→</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="blog-filter reveal">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="revenue-system">Revenue System</button>
+      <button class="filter-btn" data-filter="ai-automation">AI &amp; Automation</button>
+      <button class="filter-btn" data-filter="digital-presence">Digital Presence</button>
+      <button class="filter-btn" data-filter="seo-marketing">SEO &amp; Marketing</button>
+    </div>
+
+    <!-- Post grid -->
+    <div class="blog-grid-full reveal">
+
+      <div class="blog-card-full" data-category="ai-automation">
+        <div class="blog-card-img">
+          <img data-fallback-bg="var(--cloud)" src="images/blog-1.jpg" alt="AI automation for business" loading="lazy">
+        </div>
+        <div class="blog-card-body">
+          <div class="blog-card-meta">
+            <span class="blog-card-cat">AI &amp; Automation</span>
+            <span class="blog-card-date">February 2026</span>
+          </div>
+          <div class="blog-card-title">How to Set Up Automated Lead Follow-Up for Your Business in Kenya</div>
+          <div class="blog-card-excerpt">A step-by-step guide to building a 24/7 inbound handling system using Make and Zapier — without a developer. When a lead arrives, your system should respond before your competitor does.</div>
+          <div class="blog-card-readtime">6 min read</div>
+          <a href="#" class="blog-read">Read the guide →</a>
+        </div>
+      </div>
+
+      <div class="blog-card-full" data-category="digital-presence">
+        <div class="blog-card-img">
+          <img data-fallback-bg="var(--cloud)" src="images/blog-2.jpg" alt="Social media strategy" loading="lazy">
+        </div>
+        <div class="blog-card-body">
+          <div class="blog-card-meta">
+            <span class="blog-card-cat">Digital Presence</span>
+            <span class="blog-card-date">January 2026</span>
+          </div>
+          <div class="blog-card-title">Social Media Isn't Growing Your Business. Here's the Real Reason Why.</div>
+          <div class="blog-card-excerpt">You post consistently. You have followers. Revenue is still unpredictable. The problem is not the content — it is the system that should sit behind it and capture the intent your content generates.</div>
+          <div class="blog-card-readtime">5 min read</div>
+          <a href="#" class="blog-read">Read the diagnosis →</a>
+        </div>
+      </div>
+
+      <div class="blog-card-full" data-category="seo-marketing">
+        <div class="blog-card-img">
+          <img data-fallback-bg="var(--cloud)" src="images/blog-3.jpg" alt="SEO and website performance" loading="lazy">
+        </div>
+        <div class="blog-card-body">
+          <div class="blog-card-meta">
+            <span class="blog-card-cat">SEO &amp; Marketing</span>
+            <span class="blog-card-date">December 2025</span>
+          </div>
+          <div class="blog-card-title">Why Your Website Ranks But Nobody Converts</div>
+          <div class="blog-card-excerpt">High rankings mean nothing if traffic leaks out of your system. Most businesses diagnose an SEO problem when the real issue is conversion infrastructure. Here is the distinction that matters.</div>
+          <div class="blog-card-readtime">7 min read</div>
+          <a href="#" class="blog-read">Read the analysis →</a>
+        </div>
+      </div>
+
+      <div class="blog-card-full" data-category="revenue-system">
+        <div class="blog-card-img">
+          <img data-fallback-bg="var(--cloud)" src="images/blog-4.jpg" alt="Revenue operations dashboard" loading="lazy">
+        </div>
+        <div class="blog-card-body">
+          <div class="blog-card-meta">
+            <span class="blog-card-cat">Revenue System</span>
+            <span class="blog-card-date">December 2025</span>
+          </div>
+          <div class="blog-card-title">The Three Metrics That Actually Tell You If Your Digital System Is Working</div>
+          <div class="blog-card-excerpt">Most businesses measure reach, impressions, and follower counts. None of these measure revenue. Here are the three numbers that reveal whether your digital infrastructure is functioning.</div>
+          <div class="blog-card-readtime">4 min read</div>
+          <a href="#" class="blog-read">Read the framework →</a>
+        </div>
+      </div>
+
+      <div class="blog-card-full" data-category="digital-presence">
+        <div class="blog-card-img">
+          <img data-fallback-bg="var(--cloud)" src="images/blog-5.jpg" alt="Business team East Africa" loading="lazy">
+        </div>
+        <div class="blog-card-body">
+          <div class="blog-card-meta">
+            <span class="blog-card-cat">Digital Presence</span>
+            <span class="blog-card-date">November 2025</span>
+          </div>
+          <div class="blog-card-title">Why East African Businesses Struggle to Go Digital (And What's Actually Missing)</div>
+          <div class="blog-card-excerpt">Most businesses in Kenya and East Africa are online. Most are not generating consistent revenue from it. The gap is not visibility — it is infrastructure. Here is the diagnosis.</div>
+          <div class="blog-card-readtime">9 min read</div>
+          <a href="#" class="blog-read">Read the full piece →</a>
+        </div>
+      </div>
+
+      <div class="blog-card-full" data-category="ai-automation">
+        <div class="blog-card-img">
+          <img data-fallback-bg="var(--cloud)" src="images/blog-6.jpg" alt="Content strategy" loading="lazy">
+        </div>
+        <div class="blog-card-body">
+          <div class="blog-card-meta">
+            <span class="blog-card-cat">AI &amp; Automation</span>
+            <span class="blog-card-date">November 2025</span>
+          </div>
+          <div class="blog-card-title">What AI Can (and Cannot) Do for Your Business in 2026</div>
+          <div class="blog-card-excerpt">AI is the infrastructure layer that removes human delay. It is not magic. It does not replace strategy. Here is an honest account of where AI produces real results in revenue systems — and where it doesn't.</div>
+          <div class="blog-card-readtime">6 min read</div>
+          <a href="#" class="blog-read">Read the breakdown →</a>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</section>
+
+
+<!-- CTA -->
+<section class="cta-band">
+  <div class="wrap">
+    <div class="cta-inner">
+      <div class="eyebrow center">Act on what you've read</div>
+      <h2 class="center">Ready to diagnose<br>your own failure point?</h2>
+      <p class="lead center">The audit takes what you've read and applies it specifically to your business. We identify exactly what's broken and map the fix. No retainer. No sales pitch.</p>
+      <div class="cta-checks">
+        <span class="cta-check">No retainer required</span>
+        <span class="cta-check">Delivered in 24 hours</span>
+        <span class="cta-check">Specific to your business</span>
+      </div>
+      <a href="audit.html" class="btn-navy" style="font-size:1rem; padding:15px 32px;">
+        Request the Revenue Recovery Audit <span class="arr">→</span>
+      </a>
+    </div>
+  </div>
+</section>
+
+
+<!-- FOOTER -->
+<footer>
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <div class="footer-logo"><span class="nav-dot"></span>Zinara Digital</div>
+        <p class="footer-desc">We diagnose digital revenue failure and build the complete infrastructure to fix it.</p>
+        <div class="footer-contacts">
+          <a href="mailto:info@zinara.co.ke">info@zinara.co.ke</a>
+          <a href="tel:+254798859452">+254 798 859 452</a>
+          <a href="https://zinara.co.ke">zinara.co.ke</a>
+        </div>
+      </div>
+      <div>
+        <div class="footer-col-label">Services</div>
+        <ul class="footer-links">
+          <li><a href="services.html">Website Design</a></li>
+          <li><a href="services.html">Digital Marketing &amp; SEO</a></li>
+          <li><a href="services.html">Social Media Strategy</a></li>
+          <li><a href="services.html">Content Strategy</a></li>
+          <li><a href="services.html">AI &amp; Automation</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="footer-col-label">Company</div>
+        <ul class="footer-links">
+          <li><a href="about.html">About</a></li>
+          <li><a href="audit.html">Revenue Recovery Audit</a></li>
+          <li><a href="blog.html">Blog / Insights</a></li>
+          <li><a href="audit.html#contact">Contact</a></li>
+        </ul>
+      </div>
+      <div>
+        <div class="footer-col-label">Legal</div>
+        <ul class="footer-links">
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Terms of Service</a></li>
+        </ul>
+        <p class="footer-legal">Legal entity: Zinara<br>Nairobi, Kenya · East Africa</p>
+      </div>
+    </div>
+        <div class="footer-bottom">
+      <span class="footer-copy">© 2026 Zinara. All rights reserved. &nbsp;·&nbsp; <a href="https://zinara.co.ke">zinara.co.ke</a></span>
+      <span class="footer-tagline">Revenue failure has a cause. We find it.</span>
+    </div>
+  </div>
+</footer>
+<script src="main.js"></script>
+</body>
+</html>
