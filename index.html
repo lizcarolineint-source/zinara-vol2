@@ -1,0 +1,683 @@
+const {
+  Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
+  Header, Footer, AlignmentType, HeadingLevel, BorderStyle, WidthType,
+  ShadingType, LevelFormat, UnderlineType
+} = require('docx');
+const fs = require('fs');
+
+// ── Palette ────────────────────────────────────────────────────
+const C = {
+  ink:      "17202A", white:   "FFFFFF",
+  green1:   "145A32", green2:  "1E8449", green3:  "D5F5E3",
+  teal1:    "0E6655", teal2:   "148F77", teal3:   "D1F2EB",
+  navy:     "1B2631", gray1:   "F2F3F4", gray2:   "BFC9CA",
+  gold1:    "7D6608", gold2:   "F9E79F",
+  orange1:  "784212", orange2: "FDEBD0",
+  purple1:  "512E5F", purple2: "E8DAEF",
+  red1:     "922B21", red2:    "FADBD8",
+};
+
+// ── Helpers ────────────────────────────────────────────────────
+const nb = () => ({
+  top:{style:BorderStyle.NONE,size:0,color:C.white}, bottom:{style:BorderStyle.NONE,size:0,color:C.white},
+  left:{style:BorderStyle.NONE,size:0,color:C.white}, right:{style:BorderStyle.NONE,size:0,color:C.white}
+});
+const sb = (col=C.gray2) => ({
+  top:{style:BorderStyle.SINGLE,size:1,color:col}, bottom:{style:BorderStyle.SINGLE,size:1,color:col},
+  left:{style:BorderStyle.SINGLE,size:1,color:col}, right:{style:BorderStyle.SINGLE,size:1,color:col}
+});
+const sp = (b,a) => ({before:b,after:a});
+
+const T  = (t,opts={}) => new TextRun({text:t,font:"Arial",size:22,color:C.ink,...opts});
+const Tb = (t,opts={}) => new TextRun({text:t,font:"Arial",size:22,bold:true,color:C.ink,...opts});
+const Ti = (t,opts={}) => new TextRun({text:t,font:"Arial",size:22,italics:true,color:C.ink,...opts});
+
+function P(children, opts={}) {
+  const ch = typeof children==='string' ? [T(children)] : children;
+  return new Paragraph({spacing:sp(60,80),children:ch,...opts});
+}
+function gap(n=120) { return new Paragraph({spacing:sp(n,0),children:[T("")]}); }
+
+function H1(text) {
+  return new Paragraph({
+    spacing:sp(360,80),
+    border:{bottom:{style:BorderStyle.SINGLE,size:10,color:C.green2,space:4}},
+    children:[new TextRun({text,font:"Arial",size:36,bold:true,color:C.green1})]
+  });
+}
+function H2(text) {
+  return new Paragraph({
+    spacing:sp(240,60),
+    children:[new TextRun({text,font:"Arial",size:26,bold:true,color:C.teal2})]
+  });
+}
+function H3(text) {
+  return new Paragraph({
+    spacing:sp(180,40),
+    children:[new TextRun({text,font:"Arial",size:23,bold:true,color:C.green2})]
+  });
+}
+function BL(children,ref="bullets") {
+  const ch = typeof children==='string' ? [T(children)] : children;
+  return new Paragraph({numbering:{reference:ref,level:0},spacing:sp(40,40),children:ch});
+}
+function NL(children) {
+  const ch = typeof children==='string' ? [T(children)] : children;
+  return new Paragraph({numbering:{reference:"numbers",level:0},spacing:sp(40,50),children:ch});
+}
+
+// ── Box builders ───────────────────────────────────────────────
+function box(headerText, headerFill, items, bodyFill, opts={}) {
+  // items: array of string | array of TextRun[]
+  const headerIcon = opts.icon || "";
+  const headerSize = opts.headerSize || 24;
+  const hRow = new TableRow({ children:[new TableCell({
+    borders:nb(), shading:{fill:headerFill,type:ShadingType.CLEAR},
+    width:{size:10106,type:WidthType.DXA},
+    margins:{top:100,bottom:100,left:180,right:180},
+    children:[new Paragraph({children:[
+      new TextRun({text:`${headerIcon}${headerIcon?" ":""}${headerText}`,font:"Arial",size:headerSize,bold:true,color:C.white})
+    ]})]
+  })]});
+
+  const bodyRows = items.map((item,i) => new TableRow({children:[new TableCell({
+    borders:nb(), shading:{fill:bodyFill,type:ShadingType.CLEAR},
+    width:{size:10106,type:WidthType.DXA},
+    margins:{top:70,bottom:70,left:180,right:180},
+    children:[new Paragraph({spacing:sp(20,20), children:
+      typeof item==='string' ? [T(item)] : item
+    })]
+  })]}));
+
+  return new Table({
+    width:{size:10106,type:WidthType.DXA}, columnWidths:[10106],
+    borders:sb(opts.borderColor||C.gray2), rows:[hRow,...bodyRows]
+  });
+}
+
+function defBox(term, definition, example) {
+  const items = [[Tb("Definition:  ",{color:C.teal1}), T(definition)]];
+  if(example) items.push([Tb("Example:  ",{color:C.green2}), Ti(example)]);
+  return box(`📌  ${term}`, C.teal2, items, C.teal3, {borderColor:C.teal2, headerSize:22});
+}
+
+function howBox(title, steps) {
+  const items = steps.map((s,i)=>[Tb(`Step ${i+1}:  `,{color:C.green1}), T(s)]);
+  return box(`⚙️  HOW IT WORKS — ${title}`, C.green1, items, C.green3, {borderColor:C.green2});
+}
+
+function practicalBox(title, mins, materials, steps) {
+  const allItems = [];
+  if(materials.length) allItems.push([Tb("You need:  ",{color:C.orange1}), T(materials.join(" · "))]);
+  steps.forEach((s,i) => allItems.push([Tb(`${i+1}.  `,{color:C.orange1}), T(s)]));
+  return box(`✏️  PRACTICAL — ${title}   [${mins} min]`, C.orange1, allItems, C.orange2, {borderColor:C.orange1});
+}
+
+function keyBox(items) {
+  return box("★  KEY POINTS TO REMEMBER", C.purple1,
+    items.map(i=> typeof i==='string' ? [Tb("• ",{color:C.purple1}), T(i)] : i),
+    C.purple2, {borderColor:C.purple1});
+}
+
+function timeBox(rows) {
+  // rows: [time, topic, method]
+  const W = [1600,4800,3706];
+  const hRow = new TableRow({children:["Time","Topic / Content","Method"].map((h,i)=>new TableCell({
+    borders:sb(), shading:{fill:C.green1,type:ShadingType.CLEAR},
+    width:{size:W[i],type:WidthType.DXA}, margins:{top:80,bottom:80,left:120,right:120},
+    children:[new Paragraph({children:[new TextRun({text:h,font:"Arial",size:21,bold:true,color:C.white})]})]
+  }))});
+  const bRows = rows.map((r,ri)=>new TableRow({children:r.map((cell,ci)=>new TableCell({
+    borders:sb(), shading:{fill:ri%2===0?C.gray1:C.white,type:ShadingType.CLEAR},
+    width:{size:W[ci],type:WidthType.DXA}, margins:{top:80,bottom:80,left:120,right:120},
+    children:[new Paragraph({children:[new TextRun({text:cell,font:"Arial",size:20,color:C.ink})]})]
+  }))}));
+  return new Table({width:{size:10106,type:WidthType.DXA},columnWidths:W,borders:sb(),rows:[hRow,...bRows]});
+}
+
+function grid(headers, rows, widths) {
+  const total = widths.reduce((a,b)=>a+b,0);
+  const hRow = new TableRow({children:headers.map((h,i)=>new TableCell({
+    borders:sb(), shading:{fill:C.green1,type:ShadingType.CLEAR},
+    width:{size:widths[i],type:WidthType.DXA}, margins:{top:80,bottom:80,left:120,right:120},
+    children:[new Paragraph({children:[new TextRun({text:h,font:"Arial",size:21,bold:true,color:C.white})]})]
+  }))});
+  const bRows = rows.map((row,ri)=>new TableRow({children:row.map((cell,ci)=>new TableCell({
+    borders:sb(), shading:{fill:ri%2===0?C.green3:C.white,type:ShadingType.CLEAR},
+    width:{size:widths[ci],type:WidthType.DXA}, margins:{top:80,bottom:80,left:120,right:120},
+    children:[new Paragraph({children:
+      typeof cell==='string'?[T(cell)]:cell
+    })]
+  }))}));
+  return new Table({width:{size:total,type:WidthType.DXA},columnWidths:widths,borders:sb(),rows:[hRow,...bRows]});
+}
+
+function vsTable(lHead,rHead,rows) {
+  const W=[5053,5053];
+  const hRow=new TableRow({children:[lHead,rHead].map((h,i)=>new TableCell({
+    borders:sb(), shading:{fill:i===0?C.teal2:C.green2,type:ShadingType.CLEAR},
+    width:{size:5053,type:WidthType.DXA}, margins:{top:80,bottom:80,left:140,right:140},
+    children:[new Paragraph({alignment:AlignmentType.CENTER, children:[new TextRun({text:h,font:"Arial",size:23,bold:true,color:C.white})]})]
+  }))});
+  const bRows=rows.map(row=>new TableRow({children:row.map((cell,ci)=>new TableCell({
+    borders:sb(), shading:{fill:ci===0?C.teal3:C.green3,type:ShadingType.CLEAR},
+    width:{size:5053,type:WidthType.DXA}, margins:{top:80,bottom:80,left:140,right:140},
+    children:[new Paragraph({children:typeof cell==='string'?[T(cell)]:cell})]
+  }))}));
+  return new Table({width:{size:10106,type:WidthType.DXA},columnWidths:W,borders:sb(),rows:[hRow,...bRows]});
+}
+
+function dogstailsTable() {
+  const W=[1400,2000,6706];
+  const hRow=new TableRow({children:["Letter","Element","What It Means & Why It Cannot Be Missing"].map((h,i)=>new TableCell({
+    borders:sb(), shading:{fill:C.green1,type:ShadingType.CLEAR},
+    width:{size:W[i],type:WidthType.DXA}, margins:{top:80,bottom:80,left:120,right:120},
+    children:[new Paragraph({children:[new TextRun({text:h,font:"Arial",size:21,bold:true,color:C.white})]})]
+  }))});
+  const data=[
+    ["D","Date","When was the map made? A map of land use from 1980 is dangerously misleading if used for planning today."],
+    ["O","Orientation (North Arrow)","Which way is North? Without this, the reader cannot relate the map to the real world around them."],
+    ["G","Grid","The coordinate grid (UTM lines or latitude/longitude) that allows any feature to be given a precise location reference."],
+    ["S","Scale","How much has the real world been shrunk? Without scale, you cannot measure real distances or compare areas."],
+    ["T","Title","What does this map show, and where? A map without a title is like a book without a cover — the reader doesn't know what they're reading."],
+    ["A","Author / Source","Who made this map and using what data? This tells the reader how much to trust the information shown."],
+    ["I","Inset / Index Map","A small overview map showing where the main map fits within a larger area. Critical when the map covers a specific sub-region."],
+    ["L","Legend (Key)","Explains every symbol, colour, and pattern. Without this, the map's symbols are meaningless codes."],
+    ["S","Scale Bar (Graphic)","A drawn bar showing distances. Unlike a statement scale, this remains accurate even if the map is photocopied and enlarged or reduced."],
+  ];
+  const bRows=data.map((row,ri)=>new TableRow({children:row.map((cell,ci)=>new TableCell({
+    borders:sb(), shading:{fill:ri%2===0?C.green3:C.white,type:ShadingType.CLEAR},
+    width:{size:W[ci],type:WidthType.DXA}, margins:{top:80,bottom:80,left:120,right:120},
+    children:[new Paragraph({children:[ci===0
+      ? new TextRun({text:cell,font:"Arial",size:26,bold:true,color:C.green1})
+      : ci===1
+        ? new TextRun({text:cell,font:"Arial",size:21,bold:true,color:C.teal1})
+        : T(cell)
+    ]})]
+  }))}));
+  return new Table({width:{size:10106,type:WidthType.DXA},columnWidths:W,borders:sb(),rows:[hRow,...bRows]});
+}
+
+// ══════════════════════════════════════════════════════════════════
+const doc = new Document({
+  numbering:{config:[
+    {reference:"bullets",   levels:[{level:0,format:LevelFormat.BULLET, text:"\u2022",alignment:AlignmentType.LEFT,style:{paragraph:{indent:{left:720,hanging:360}}}}]},
+    {reference:"numbers",   levels:[{level:0,format:LevelFormat.DECIMAL,text:"%1.",  alignment:AlignmentType.LEFT,style:{paragraph:{indent:{left:720,hanging:360}}}}]},
+  ]},
+  styles:{
+    default:{document:{run:{font:"Arial",size:22}}},
+    paragraphStyles:[
+      {id:"Heading1",name:"Heading 1",basedOn:"Normal",next:"Normal",quickFormat:true,
+       run:{size:36,bold:true,font:"Arial",color:C.green1},
+       paragraph:{spacing:{before:360,after:80},outlineLevel:0}},
+      {id:"Heading2",name:"Heading 2",basedOn:"Normal",next:"Normal",quickFormat:true,
+       run:{size:26,bold:true,font:"Arial",color:C.teal2},
+       paragraph:{spacing:{before:240,after:60},outlineLevel:1}},
+    ]
+  },
+  sections:[{
+    properties:{page:{size:{width:11906,height:16838},margin:{top:900,right:900,bottom:900,left:900}}},
+
+    headers:{default:new Header({children:[new Table({
+      width:{size:10106,type:WidthType.DXA},columnWidths:[6800,3306],
+      borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.SINGLE,size:8,color:C.green2},
+               left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},
+               insideH:{style:BorderStyle.NONE},insideV:{style:BorderStyle.NONE}},
+      rows:[new TableRow({children:[
+        new TableCell({borders:nb(),width:{size:6800,type:WidthType.DXA},margins:{top:0,bottom:60,left:0,right:0},
+          children:[new Paragraph({children:[new TextRun({text:"GIS & Cartography  |  Grade 10 Student Guide",font:"Arial",size:18,bold:true,color:C.green1})]})]
+        }),
+        new TableCell({borders:nb(),width:{size:3306,type:WidthType.DXA},margins:{top:0,bottom:60,left:0,right:0},
+          children:[new Paragraph({alignment:AlignmentType.RIGHT,children:[new TextRun({text:"Geography Department",font:"Arial",size:18,italics:true,color:C.teal2})]})]
+        }),
+      ]})]
+    })]})}],
+
+    footers:{default:new Footer({children:[new Table({
+      width:{size:10106,type:WidthType.DXA},columnWidths:[5000,5106],
+      borders:{top:{style:BorderStyle.SINGLE,size:4,color:C.green2},bottom:{style:BorderStyle.NONE},
+               left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},
+               insideH:{style:BorderStyle.NONE},insideV:{style:BorderStyle.NONE}},
+      rows:[new TableRow({children:[
+        new TableCell({borders:nb(),width:{size:5000,type:WidthType.DXA},margins:{top:60,bottom:0,left:0,right:0},
+          children:[new Paragraph({children:[new TextRun({text:"Grade 10 Geography  •  GIS & Cartography",font:"Arial",size:16,italics:true,color:C.teal2})]})]
+        }),
+        new TableCell({borders:nb(),width:{size:5106,type:WidthType.DXA},margins:{top:60,bottom:0,left:0,right:0},
+          children:[new Paragraph({alignment:AlignmentType.RIGHT,children:[new TextRun({text:"Name: _____________________   Class: _______",font:"Arial",size:16,color:C.green1})]})]
+        }),
+      ]})]
+    })]})}],
+
+    children:[
+
+      // ── COVER ──────────────────────────────────────────────────
+      new Table({width:{size:10106,type:WidthType.DXA},columnWidths:[10106],
+        borders:{top:{style:BorderStyle.NONE},bottom:{style:BorderStyle.NONE},left:{style:BorderStyle.NONE},right:{style:BorderStyle.NONE},insideH:{style:BorderStyle.NONE},insideV:{style:BorderStyle.NONE}},
+        rows:[
+          new TableRow({children:[new TableCell({
+            borders:nb(), shading:{fill:C.green1,type:ShadingType.CLEAR},
+            width:{size:10106,type:WidthType.DXA}, margins:{top:200,bottom:40,left:400,right:400},
+            children:[
+              new Paragraph({alignment:AlignmentType.CENTER,spacing:sp(80,40),children:[new TextRun({text:"GEOGRAPHY  •  GRADE 10  •  FORM 2",font:"Arial",size:20,color:"A9DFBF",bold:true,allCaps:true})]}),
+              new Paragraph({alignment:AlignmentType.CENTER,spacing:sp(20,20),children:[new TextRun({text:"Student Training Guide",font:"Arial",size:52,bold:true,color:C.white})]}),
+              new Paragraph({alignment:AlignmentType.CENTER,spacing:sp(20,80),children:[new TextRun({text:"Geographic Information Systems, Cartography & Remote Sensing",font:"Arial",size:26,color:"A9DFBF"})]}),
+            ]
+          })]}),
+          new TableRow({children:[new TableCell({
+            borders:nb(), shading:{fill:C.teal2,type:ShadingType.CLEAR},
+            width:{size:10106,type:WidthType.DXA}, margins:{top:80,bottom:80,left:400,right:400},
+            children:[
+              new Paragraph({alignment:AlignmentType.CENTER,spacing:sp(0,0),children:[new TextRun({text:"⏱  120-Minute Lesson  |  Includes Hands-On Practical Activity",font:"Arial",size:22,color:C.white})]})
+            ]
+          })]}),
+          new TableRow({children:[new TableCell({
+            borders:nb(), shading:{fill:C.green2,type:ShadingType.CLEAR},
+            width:{size:10106,type:WidthType.DXA}, margins:{top:80,bottom:80,left:400,right:400},
+            children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:"Name: _______________________     Class: ____________     Date: ______________",font:"Arial",size:20,color:C.white})]})]
+          })]}),
+        ]
+      }),
+
+      gap(160),
+
+      // ── LESSON OVERVIEW ────────────────────────────────────────
+      box("Lesson Overview — What You Will Learn Today", C.navy, [
+        [Tb("By the end of this lesson, you will be able to: ",{color:"A9DFBF"})],
+        [T("✔  Explain what GIS is and how it relates to cartography and remote sensing")],
+        [T("✔  Describe the difference between vector and raster data — and know WHEN to use each")],
+        [T("✔  Explain georeferencing and digitizing in your own words, and describe WHY both are needed")],
+        [T("✔  State which map projection Kenya uses and give a logical reason why")],
+        [T("✔  Identify and explain all 9 elements of a map using the DOGSTAILS framework")],
+        [T("✔  Name and describe at least 5 types of maps and their specific uses")],
+        [T("✔  Trace a satellite image to create a basic vector map of your school — and add all required cartographic elements")],
+      ], C.navy, {borderColor:C.navy}),
+
+      gap(80),
+      timeBox([
+        ["0:00 – 0:15","Introduction: The Location Question + What is GIS?","Discussion + relatable examples"],
+        ["0:15 – 0:30","Remote Sensing: How satellites see the Earth","Step-by-step explanation + NDVI logic"],
+        ["0:30 – 0:50","GIS Data: Vector vs Raster + Georeferencing + Digitizing","Key terms with HOW logic"],
+        ["0:50 – 1:05","Coordinate Systems: Projection + UTM in Kenya","Analogy + Kenya-specific examples"],
+        ["1:05 – 1:25","Cartography: Types of Maps + DOGSTAILS Map Elements","Reference table + DOGSTAILS framework"],
+        ["1:25 – 2:00","Practical: Digitizing and Mapping the School Area","Hands-on activity — no computer needed"],
+        ["2:00 – 2:05","Wrap-Up: The Layers Discussion + Exit Ticket","Class discussion + verbal quiz"],
+      ]),
+
+      gap(200),
+
+      // ══════════════════════════════════════════════════════════
+      // SECTION 1 — INTRODUCTION
+      // ══════════════════════════════════════════════════════════
+      H1("1.  Introduction — Why Location Matters"),
+
+      P([Tb("Open your phone for one moment. "), T("Even if you just want to know the nearest matatu stop, check where a friend is, or find a restaurant — your phone uses location to answer those questions. That is GIS.")]),
+      gap(60),
+      P([Tb("The core idea: "), T("Almost every problem humans need to solve has a WHERE attached to it. Where is the disease spreading? Where is the safest road? Where is the land suitable for a new school? GIS and cartography are the tools that answer WHERE questions with evidence, not guesswork.")]),
+
+      gap(100),
+      defBox("GIS — Geographic Information System",
+        "A computer system used to capture, store, analyse, and display information that is linked to specific locations on the Earth's surface.",
+        "Google Maps is a GIS. So is the NHIF system that maps health facilities across Kenya. So is the Kenya Meteorological Department system that maps rainfall zones."
+      ),
+
+      gap(80),
+      defBox("Cartography",
+        "The science and art of designing and producing maps. Cartography is what makes a GIS result readable — it turns raw data into a clear, accurate, visual communication.",
+        "Deciding which colours to use for a rainfall map, how to draw a road symbol, or which features to include or leave out — these are cartographic decisions."
+      ),
+
+      gap(80),
+      P([Tb("The relationship between them: "), T("GIS is the brain. Cartography is the voice. GIS analyses spatial data; cartography communicates the results in map form so that anyone — a farmer, a doctor, a county governor — can understand and act on it.")]),
+
+      gap(200),
+
+      // ══════════════════════════════════════════════════════════
+      // SECTION 2 — REMOTE SENSING
+      // ══════════════════════════════════════════════════════════
+      H1("2.  Remote Sensing — How Satellites Read the Earth"),
+
+      defBox("Remote Sensing",
+        "Collecting information about an object or area WITHOUT physically touching it, using sensors on satellites or aircraft that detect reflected energy.",
+        "A satellite 700 km above Kenya can tell us which crops are sick, where a fire is burning, or how much of a forest has been cleared — without a single person visiting the site."
+      ),
+
+      gap(100),
+      H2("2.1  The Logic — Why Different Surfaces Look Different from Space"),
+
+      P("The Sun sends out energy in the form of light waves. When that energy hits the Earth, every surface — grass, water, bare soil, concrete, crops — absorbs some of it and reflects the rest back upward. The key insight is this:"),
+      gap(40),
+      new Paragraph({
+        alignment:AlignmentType.CENTER, spacing:sp(60,60),
+        children:[new TextRun({text:'"Different surfaces reflect different amounts of energy, at different wavelengths."',font:"Arial",size:26,bold:true,italics:true,color:C.green1})]
+      }),
+      gap(40),
+      P("Satellites carry sensors — think of them as very advanced cameras — that measure this reflected energy across many wavelength bands, including bands that the human eye cannot see, such as near-infrared (NIR) light. It is in these invisible bands that some of the most valuable information about the Earth's surface is hidden."),
+
+      gap(100),
+      H2("2.2  The NDVI Example — GIS Tells the Farmer Which Crops Are Sick"),
+
+      P([Tb("NDVI"), T(" (Normalized Difference Vegetation Index) is one of the most widely used remote sensing tools in agriculture. Here is the complete logic chain — follow it step by step:")]),
+      gap(60),
+      BL([Tb("Why healthy plants look different from sick ones: "), T("Healthy plant leaves are full of chlorophyll. Chlorophyll absorbs red light and uses it for photosynthesis. It reflects near-infrared (NIR) light strongly. A sick or stressed plant loses chlorophyll, so it reflects MORE red light and LESS NIR light than a healthy plant — the opposite pattern.")]),
+      BL([Tb("What the satellite measures: "), T("The sensor records two values for every pixel on the ground: how much Red light was reflected, and how much NIR light was reflected.")]),
+      BL([Tb("The NDVI formula: "), Ti("NDVI = (NIR − Red) ÷ (NIR + Red)"), T(". The result is a number between −1 and +1.")]),
+      BL([Tb("Reading the result: "), T("High NDVI (close to +1) = lush, healthy plants. Low NDVI (near 0) = stressed crops or bare soil. Negative NDVI = water or non-vegetated surface.")]),
+      gap(80),
+
+      howBox("How GIS Helps a Farmer — Input, Process, Output", [
+        "INPUT — CAPTURE: A Sentinel-2 satellite passes over a 200-hectare maize farm in Nakuru every 5 days. Its sensor captures Red and Near-Infrared reflectance values at 10m resolution — that is one data point for every 10m × 10m square of the farm.",
+        "PROCESS — ANALYSE: The GIS software calculates NDVI for every pixel using the formula. It then classifies each pixel by colour: dark green (healthy, NDVI > 0.6), yellow (stressed, 0.3–0.6), red (very poor, < 0.3).",
+        "PROCESS — LAYER: The GIS analyst overlays the NDVI raster with a soil type vector layer. The analyst finds the red (poor) zone sits on a patch of poorly drained clay soil — this explains WHY the crops are stressed there.",
+        "OUTPUT — DECIDE: A 'prescription map' is printed: a precise polygon showing which 12 hectares of the farm need lime added to fix soil pH, and which 8 hectares need drainage improvement — not the whole farm. No guessing.",
+        "OUTPUT — ACT: The farmer's tractor carries a GPS unit and the prescription map. It automatically applies lime only within the marked polygons. The farmer saves 30% on lime and achieves a 40% yield improvement in the problem zones next season."
+      ]),
+
+      gap(80),
+      P([Tb("The principle: ", {color:C.teal1}), T("GIS did not just 'help with farming'. It replaced expensive, imprecise field-walking with cheap, fast, satellite-based spatial intelligence. Every step had a logical reason. That is what makes GIS powerful — not the software, but the thinking behind it.")]),
+
+      gap(200),
+
+      // ══════════════════════════════════════════════════════════
+      // SECTION 3 — GIS DATA: VECTOR AND RASTER
+      // ══════════════════════════════════════════════════════════
+      H1("3.  GIS Data — Vector and Raster"),
+
+      P("All geographic data in a GIS is stored in one of two formats. Understanding the difference is not about memorising a definition — it is about understanding which format is right for which type of geographic information, and why."),
+
+      gap(80),
+      vsTable("RASTER DATA","VECTOR DATA",[
+        [
+          [Tb("What it is:  ",{color:C.teal1}), T("A grid of equally-sized cells (pixels). Each cell holds one value. Like a digital photograph of the Earth.")],
+          [Tb("What it is:  ",{color:C.green2}), T("Geographic features stored as mathematical shapes — points, lines, and polygons. Like a precise drawing of the Earth.")]
+        ],
+        [
+          [Tb("Point (well, tree, school): "), T("A location with no length or area at the map scale. Stored as a single x,y coordinate.")],
+          [Tb("Resolution:  "), T("The size of each cell. A 10m resolution = each pixel covers 10m × 10m of real ground. Finer resolution = more detail = larger file.")]
+        ],
+        [
+          [Tb("Line (road, river, fence): "), T("A feature with length but no width at the map scale. Stored as a sequence of x,y coordinates connected in order.")],
+          [Tb("Continuous data:  "), T("Best for information that varies gradually across the landscape — rainfall, temperature, elevation, crop health (NDVI).")]
+        ],
+        [
+          [Tb("Polygon (forest, county, lake): "), T("A feature with area. Stored as a closed sequence of x,y coordinates that forms a bounded shape.")],
+          [Tb("Satellite imagery:  "), T("All satellite images are raster. So are Digital Elevation Models (DEMs) and processed remote sensing outputs like NDVI maps.")]
+        ],
+        [
+          [Tb("Best for:  "), T("Precise boundaries — land parcels, administrative boundaries, infrastructure networks, individual features that need to be named and queried.")],
+          [Tb("Best for:  "), T("Phenomena without sharp boundaries — temperature gradually changes across space; so does elevation, soil moisture, and crop health.")]
+        ],
+      ]),
+
+      gap(80),
+      P([Tb("Think of it this way:  ",{color:C.teal1}), Ti("Raster is like a photograph — every centimetre of the image is captured, but you cannot easily select 'just the river'. Vector is like a drawing — each feature is a distinct object you can select, label, measure, and update independently.")]),
+
+      gap(80),
+      P([Tb("They work together: "), T("In a real GIS project, you almost always use both. The satellite image (raster) is your background and data source. The roads, county boundaries, and school locations (vector) are overlaid on top. Together, they give you both the visual context and the precise, queryable data.")]),
+
+      gap(200),
+
+      // ══════════════════════════════════════════════════════════
+      // SECTION 4 — GEOREFERENCING AND DIGITIZING
+      // ══════════════════════════════════════════════════════════
+      H1("4.  Making Data Usable — Georeferencing and Digitizing"),
+
+      P("These two processes are almost always done in sequence. Georeferencing comes first; digitizing follows. Understand WHY each is needed before you worry about HOW it is done."),
+
+      gap(100),
+      H2("4.1  Georeferencing"),
+
+      P([Tb("The problem it solves: "), T("Imagine your school has a paper map drawn in 1980 — showing all the buildings, paths, and boundaries. You scan it into a computer. You now have a digital image of the map. But to your computer, it is just a picture — a collection of pixels with no idea where on Earth they belong. You cannot overlay this image on a satellite map. You cannot measure real distances from it. It is geographically meaningless.")]),
+
+      gap(80),
+      defBox("Georeferencing",
+        "The process of assigning real-world coordinates to a digital image or scanned map so that it 'knows' its exact location on Earth and can be used alongside other GIS data.",
+        "Like giving a brain to a dumb picture — after georeferencing, every pixel on your scanned map corresponds to a precise latitude/longitude or UTM coordinate on the real Earth."
+      ),
+
+      gap(80),
+      howBox("Georeferencing — How It Is Done", [
+        "Identify at least 4–6 recognisable features in your scanned image that you can also find in a map that already has correct coordinates (such as Google Earth or a GPS track). These are called Ground Control Points (GCPs). Good GCPs are stable, clearly identifiable features — a road junction, a building corner, a survey beacon.",
+        "In the GIS software, you click on the GCP in your ungeoreferenced image and enter its known real-world coordinates — or click the matching point on an already-georeferenced reference layer.",
+        "You repeat this for all your GCPs, spread across the image — not all clustered in one corner.",
+        "The software calculates a mathematical transformation that stretches, rotates, and warps the image so every pixel aligns with its correct real-world position.",
+        "The image is now georeferenced. It slots precisely into the GIS alongside satellite images, road layers, and boundary data — all speaking the same spatial language."
+      ]),
+
+      gap(80),
+      P([Tb("Why it matters: ", {color:C.teal1}), T("Georeferencing is what allows you to overlay data from different sources. A satellite image from NASA, a road map from KeNHA, and your scanned 1980 school map can only be stacked on top of each other if they all share the same coordinate reference system. Georeferencing is what makes that possible.")]),
+
+      gap(120),
+      H2("4.2  Digitizing"),
+
+      P([Tb("The problem it solves: "), T("Your georeferenced image is now correctly positioned, but it is still a raster — a grid of pixels. You cannot ask the computer 'what is the total length of all paths in this school?' or 'which classroom buildings have an area greater than 200 m²?' You cannot answer those questions from pixels. You need vector features — objects that can be measured, labelled, and queried.")]),
+
+      defBox("Digitizing",
+        "Tracing features from a georeferenced image on screen to create new vector data — points, lines, or polygons — that can be measured, labelled, analysed, and updated.",
+        "You load a georeferenced satellite image of your school. You trace the outline of each classroom block to create polygon features. You trace each footpath as a line. You click on each water tap to create a point. The result is a precise vector map of your school."
+      ),
+
+      gap(80),
+      P([Tb("Why digitize instead of just using the image? "), T("Once you have traced a classroom block as a polygon, you can: calculate its exact area in square metres; attach attribute data (number of students, condition, year built); overlay it with a shade analysis to see which rooms get the most afternoon sun; and update it instantly if a new building is added. None of this is possible with a raster image alone.")]),
+
+      gap(80),
+      keyBox([
+        "Georeferencing MUST come before digitizing — you cannot accurately trace vector features from an image that does not know where it is on Earth.",
+        "The quality of your digitizing depends on the quality of your georeferencing. Poor control points = misaligned features = wrong coordinates = useless data.",
+        "When digitizing, ZOOM IN close to the image. Features that look clear at small scale often have complex shapes and edges that you can only see up close.",
+        "Every digitized feature should have attribute data filled in — a name, a category, a measurement. A road with no name or classification is far less useful than one with complete attributes."
+      ]),
+
+      gap(200),
+
+      // ══════════════════════════════════════════════════════════
+      // SECTION 5 — PROJECTION AND UTM
+      // ══════════════════════════════════════════════════════════
+      H1("5.  Coordinate Systems — Projection and UTM"),
+
+      H2("5.1  The Core Problem: You Cannot Flatten a Sphere"),
+
+      P("The Earth is roughly spherical — a three-dimensional object. A map is flat — two-dimensional. This creates a fundamental problem that every cartographer and GIS analyst must confront:"),
+      gap(40),
+      new Paragraph({
+        alignment:AlignmentType.CENTER,spacing:sp(60,60),
+        children:[new TextRun({text:"It is mathematically impossible to represent the curved surface of the Earth on a flat map without introducing some distortion.",font:"Arial",size:23,bold:true,italics:true,color:C.red1})]
+      }),
+      gap(40),
+      P([Tb("The orange peel test: "), T("Peel an orange, keeping the peel in one piece. Now try to press it completely flat on your desk. It is impossible to do so without tearing or stretching the peel. The same problem faces any cartographer trying to flatten the Earth onto paper.")]),
+
+      gap(80),
+      defBox("Map Projection",
+        "A mathematical method for transforming the curved, three-dimensional surface of the Earth onto a flat, two-dimensional surface. Every projection introduces some distortion — the cartographer chooses which property to protect and which to sacrifice.",
+        "The Mercator projection preserves shape and angles — useful for navigation — but makes areas near the poles look enormous. On a Mercator map, Greenland appears larger than Africa. In reality, Africa is 14 times bigger."
+      ),
+
+      gap(80),
+      grid(["Property Preserved","What It Means","Best Used For"],[
+        ["AREA (Equal-Area)","Every region on the map has the correct proportion of area relative to others. Shape is distorted.","Comparing sizes of regions, mapping land cover, analysing which county has the most farmland."],
+        ["SHAPE (Conformal)","Local shapes and angles are correct. Area is distorted away from the standard line.","Navigation, engineering, topographic mapping. Roads appear at the correct bearing."],
+        ["DISTANCE (Equidistant)","Distances from one central point are accurate.","Emergency service planning, measuring distances from a fixed location."],
+        ["DIRECTION (Azimuthal)","Compass bearings from the centre point are correct.","Aviation and military planning from a central base."],
+      ],[2800,3506,3800]),
+
+      gap(100),
+      H2("5.2  UTM — Universal Transverse Mercator"),
+
+      P("UTM is the projection system used by GIS professionals in Kenya and most of the world for detailed, accurate local mapping. Here is why it was designed the way it was:"),
+
+      gap(80),
+      howBox("Why UTM Works — The Strip Logic", [
+        "THE PROBLEM WITH ONE PROJECTION: A single Mercator projection applied to the whole Earth is very accurate near the equator but becomes severely distorted as you move toward the poles. This makes it unsuitable for precise measurement work.",
+        "THE SOLUTION — DIVIDE AND CONQUER: Instead of projecting the whole Earth at once, UTM divides the Earth into 60 narrow vertical strips, each exactly 6 degrees of longitude wide. Each strip gets its own separate, local Transverse Mercator projection.",
+        "WHY THIS WORKS: Within a strip only 6° wide, the distortion caused by flattening that small section of the curved Earth is less than 0.04% — accurate enough for engineering surveys, land registration, and detailed GIS mapping.",
+        "THE COORDINATE SYSTEM: Within each zone, locations are given as Easting (distance in metres east from the zone's central meridian) and Northing (distance in metres from the equator). Because the unit is METRES, distance calculations become very straightforward: subtract two Northing values and you have a real distance.",
+        "THE ZONE NUMBER: Zones are numbered 1 to 60 from west to east around the globe. Each zone is split into North (N) and South (S) of the equator."
+      ]),
+
+      gap(80),
+      H3("Kenya and UTM — The Zones We Use"),
+
+      P("Kenya lies between approximately 34°E and 42°E longitude and straddles the equator. This means Kenya falls across two main UTM zone numbers and both North and South hemispheres:"),
+
+      gap(60),
+      grid(["UTM Zone","Area of Kenya Covered","Key Locations"],[
+        ["Zone 36S","Western Kenya, south of equator","Parts of Kisumu, Nyanza, South Rift"],
+        ["Zone 36N","Far northwestern Kenya, north of equator","Parts of Turkana, West Pokot"],
+        ["Zone 37S","Central, eastern & southern Kenya, south of equator","Nairobi, Machakos, Mombasa, Tsavo — THE MOST USED ZONE"],
+        ["Zone 37N","Central & northern Kenya, north of equator","Isiolo, Garissa, areas north of Nairobi"],
+      ],[1800,4200,4106]),
+
+      gap(80),
+      P([Tb("The datum — Arc 1960 vs WGS 84:  "), T("A datum is the mathematical model of the Earth's shape that the coordinate system is built on. Kenya's historical maps use "), Tb("Arc 1960"), T(" — the datum from original colonial-era surveys. Modern GPS and satellite data uses "), Tb("WGS 84"), T(". If you mix these two datums without conversion, coordinates can be off by "), Tb("up to 300 metres"), T(" — which is a serious error in land surveying or construction. Always check which datum your data uses.")]),
+
+      gap(80),
+      keyBox([
+        "If you are mapping in Nairobi, your data should be in UTM Zone 37S. Easting values will be roughly 250,000–290,000 m; Northing values roughly 9,830,000–9,870,000 m.",
+        "The fact that UTM coordinates are in METRES is one of the reasons professionals prefer it — you can calculate real distances by simple subtraction, without any trigonometry.",
+        "The Survey of Kenya (SoK) and the Kenya National Land Commission use UTM Zone 37S as the standard for all official land registration and cadastral mapping."
+      ]),
+
+      gap(200),
+
+      // ══════════════════════════════════════════════════════════
+      // SECTION 6 — MAPS: TYPES AND ELEMENTS
+      // ══════════════════════════════════════════════════════════
+      H1("6.  Cartography — Types of Maps and Map Elements"),
+
+      H2("6.1  Types of Maps"),
+
+      P("Every map type exists because it answers a specific kind of question. Choose the wrong map type and the information becomes misleading or difficult to read. A good cartographer matches the map type to the question being answered."),
+
+      gap(80),
+      grid(["Map Type","The Question It Answers","Key Features"],[
+        ["Topographic","What is the shape (relief) of the land?","Contour lines connecting points of equal elevation. The closer the lines, the steeper the slope. Also shows rivers, roads, vegetation. Standard scale: 1:50,000 in Kenya (Survey of Kenya sheets)."],
+        ["Thematic","How is a specific variable distributed across space?","A simple base map with one theme overlaid using colours, symbols, or shading. E.g., a rainfall map, a disease distribution map, an NDVI map. Tells ONE story clearly."],
+        ["Political / Administrative","Where are the boundaries of countries, counties, wards?","Shows human-defined boundaries only — no terrain. Used for governance, elections, resource allocation by jurisdiction."],
+        ["Cadastral","Who owns which piece of land?","Shows individual land parcels (plots) with their registration numbers and precise boundaries. Very large scale — often 1:2,500. Used by land registries and courts."],
+        ["Choropleth","How does a variable compare across defined regions?","Regions shaded by intensity of colour. Darker = higher value. E.g., a map of county-level school enrolment rates — darker county = higher enrolment."],
+        ["Isoline (Isopleth)","How does a value change continuously across the landscape?","Lines connecting points of equal value. Contour lines on topographic maps are isolines of equal elevation. Isohyets show equal rainfall. Isotherms show equal temperature."],
+        ["Road / Transport","How do I get from A to B? What transport links exist?","Emphasises roads, railways, airports, ports. Includes distance markers and road classification. Used by logistics, emergency services, and transport planners."],
+      ],[2400,3306,4400]),
+
+      gap(120),
+      H2("6.2  Elements of a Map — DOGSTAILS"),
+
+      P([T("A map without its required elements is not just incomplete — it can actively mislead the reader. Use the mnemonic "), Tb("DOGSTAILS",{color:C.green1}), T(" to remember all nine essential elements. Every map you produce for this course must include all of them.")]),
+
+      gap(80),
+      dogstailsTable(),
+
+      gap(80),
+      P([Tb("The most commonly missing element in student maps: "), T("The Source and Date. A map that does not say WHO made it, WHEN, and based on WHAT data, cannot be trusted. Imagine using a road map with no date — roads that were built after the map was made simply will not exist on it, and you could get completely lost.")]),
+
+      gap(80),
+      H3("Scale — The Three Forms"),
+      P("Scale is so important it appears twice in DOGSTAILS (S and the final S). There are three ways to express it, and each has a different use:"),
+
+      grid(["Form of Scale","How It Looks","Key Advantage / Limitation"],[
+        ["Representative Fraction (RF)","1:50,000  or  1/50,000","Universal — works in any unit. 1 cm = 500 m, 1 inch = 833 yards, 1 mm = 50 m. But becomes wrong if the map is resized."],
+        ["Statement Scale","'One centimetre represents five kilometres'","Easy to read and understand. Also becomes wrong if the map is resized — the statement no longer matches."],
+        ["Graphic / Linear Scale Bar","A drawn bar divided into distance segments","The ONLY form of scale that remains correct when a map is photocopied, enlarged, or reduced — because the bar shrinks and grows with the map."],
+      ],[2600,3000,4506]),
+
+      gap(80),
+      P([Tb("Large scale vs. small scale — a common confusion: "), T("A "), Tb("LARGE scale"), T(" map (e.g., 1:2,500) covers a "), Tb("SMALL area"), T(" in great detail. A "), Tb("SMALL scale"), T(" map (e.g., 1:1,000,000) covers a "), Tb("LARGE area"), T(" with little detail. Think of it mathematically: 1/2,500 is a much larger fraction than 1/1,000,000.")]),
+
+      gap(200),
+
+      // ══════════════════════════════════════════════════════════
+      // SECTION 7 — THE PRACTICAL
+      // ══════════════════════════════════════════════════════════
+      H1("7.  Practical — Digitizing and Mapping the School Area"),
+
+      P("This practical brings together everything you have learned. You will carry out an analogue version of the exact workflow that professional GIS analysts use in offices and field teams across Kenya every day: start with a raster image, georeference it, digitize vector features from it, and add proper cartographic elements to produce a finished map."),
+
+      gap(80),
+      P([Tb("Time allowed: "), T("35 minutes.  "), Tb("Work in pairs.")]),
+      gap(40),
+
+      practicalBox("Digitizing and Mapping the School Area", 35,
+        ["Printed satellite/aerial image of the school (1 per pair)", "Tracing paper or transparency sheet", "Ruler and set square", "3 different coloured pens or pencils", "Pencil for annotations"],
+        [
+          "STEP 1 — UNDERSTAND YOUR RASTER BASE: Look carefully at the printed satellite image. This is your raster layer — the real-world background data. Identify at least FOUR clearly recognisable Ground Control Points (GCPs): a gate corner, a building corner, the edge of the sports pitch, or a junction of two paths. Mark and label each GCP on the image with a pencil cross and a number (GCP 1, GCP 2…). These are what you would use to georeference this image in a GIS software.",
+          "STEP 2 — SET UP YOUR VECTOR LAYER: Place your tracing paper neatly over the satellite image and secure it so it does not shift. This tracing paper is your new, empty vector layer — exactly like creating a blank shapefile in QGIS.",
+          "STEP 3 — DIGITIZE THREE FEATURE TYPES: Using three different colours, carefully trace the following features onto the tracing paper. POINTS (one colour): mark the location of at least 3 water taps or security lights as dot symbols. LINES (second colour): trace all visible footpaths and access roads within the school. POLYGONS (third colour): trace the outline of at least 4 classroom blocks or main buildings as closed shapes.",
+          "STEP 4 — MEASURE AND CALCULATE SCALE: Using your ruler, measure the length of the sports pitch (or a similar identifiable feature) on the satellite image in centimetres. Your teacher will tell you the actual real-world length of that feature in metres. Calculate the Representative Fraction: Scale = 1 : (Real Length ÷ Map Length). Show your calculation in the margin of your map.",
+          "STEP 5 — ADD DOGSTAILS CARTOGRAPHIC ELEMENTS: Your map is not finished until it has all required elements. In the margin of your tracing paper, add: a Title stating what the map shows; a North Arrow; a Graphic Scale Bar based on your calculation; a Legend explaining your three colours/symbols; your Name and Date (Author + Date); the Source (e.g., 'Base image: Google Earth, 2024').",
+          "STEP 6 — QUALITY CHECK: Before you hand in, go through DOGSTAILS letter by letter. Put a tick next to each element that is present on your map. If any element is missing, add it now. A map is only as good as its completeness and honesty."
+        ]
+      ),
+
+      gap(120),
+      H2("Practical Assessment Criteria"),
+
+      grid(["Assessment Area","What the Teacher Looks For","Marks"],[
+        ["GCP Identification","4 GCPs clearly marked and labelled on the satellite image","4"],
+        ["Digitizing — Points","At least 3 point features correctly placed and distinguishable","4"],
+        ["Digitizing — Lines","Footpaths/roads traced accurately, following the image features","4"],
+        ["Digitizing — Polygons","At least 4 buildings traced as closed, accurate outlines","4"],
+        ["Scale Calculation","Working shown, RF correctly calculated, graphic scale bar drawn","4"],
+        ["DOGSTAILS Elements","All 9 elements present, correctly placed and labelled","6"],
+        ["Neatness & Precision","Features are clear, lines are clean, colours are distinguishable","4"],
+        ["Total","","30"],
+      ],[3200,4706,2200]),
+
+      gap(200),
+
+      // ══════════════════════════════════════════════════════════
+      // SECTION 8 — CONCLUSION
+      // ══════════════════════════════════════════════════════════
+      H1("8.  Conclusion — Thinking in Layers"),
+
+      P("You have spent this lesson building a complete picture of how GIS works — from the satellite in space, through data processing, to the map in your hand. Before you leave, consider this question:"),
+
+      gap(80),
+      new Table({
+        width:{size:10106,type:WidthType.DXA},columnWidths:[10106],
+        borders:sb(C.green1),
+        rows:[new TableRow({children:[new TableCell({
+          borders:nb(), shading:{fill:C.green3,type:ShadingType.CLEAR},
+          width:{size:10106,type:WidthType.DXA}, margins:{top:140,bottom:140,left:240,right:240},
+          children:[
+            new Paragraph({alignment:AlignmentType.CENTER,spacing:sp(0,20),children:[new TextRun({text:"CLASS DISCUSSION",font:"Arial",size:22,bold:true,color:C.green1})]}),
+            new Paragraph({alignment:AlignmentType.CENTER,spacing:sp(0,60),children:[new TextRun({text:'"If we wanted to build a new library on this school campus that stays cool in the afternoon — what GIS layers would we need?"',font:"Arial",size:24,italics:true,color:C.ink})]}),
+            new Paragraph({alignment:AlignmentType.CENTER,spacing:sp(0,0),children:[new TextRun({text:"Hint: Think about buildings (shade), sun direction (solar path), and open ground (available space).",font:"Arial",size:20,color:C.teal1})]}),
+          ]
+        })]})]
+      }),
+
+      gap(80),
+      P([Tb("The answer: "), T("A building footprint layer (polygons — to see where shade falls in the afternoon), a solar path analysis raster (to see which parts of the campus are shaded after 2pm), and an open space polygon layer (to find buildable ground). Combine those three layers in a GIS and you have a data-driven answer to a real spatial problem. That is GIS.")]),
+
+      gap(80),
+      P([Tb("The big idea to carry with you: ",{color:C.green1}), T("A map is a finished cake. GIS is the kitchen — the ingredients, the tools, and the process. Cartography is what makes the finished cake look and taste right for the person eating it. All three are needed. None works well without the others.")]),
+
+      gap(120),
+      box("Exit Ticket — Answer ONE of These Before You Leave", C.navy,
+        [
+          [T("1.  What is the difference between raster and vector data? Give one real example of each from today's lesson.")],
+          [T("2.  Why must georeferencing happen before digitizing? Explain the logical reason, not just the order.")],
+          [T("3.  Kenya uses UTM Zone 37S for most mapping. Why are UTM coordinates expressed in metres rather than degrees?")],
+          [T("4.  A map is missing its date and source. Why is this a serious problem for the person using it?")],
+          [T("5.  A farmer in Nakuru has 200 hectares of maize. Explain, step by step, how GIS and remote sensing would help them know which part of the farm needs more fertiliser — without walking the entire farm.")],
+        ],
+        C.navy, {borderColor:C.navy}
+      ),
+
+      gap(120),
+      new Paragraph({
+        alignment:AlignmentType.CENTER, spacing:sp(80,40),
+        border:{top:{style:BorderStyle.SINGLE,size:6,color:C.green2}},
+        children:[new TextRun({text:"End of Training Guide  •  Grade 10 GIS & Cartography",font:"Arial",size:20,bold:true,color:C.green1})]
+      }),
+      new Paragraph({
+        alignment:AlignmentType.CENTER, spacing:sp(20,80),
+        children:[new TextRun({text:"Geography Department  •  For educational use  •  Review date: annually",font:"Arial",size:16,italics:true,color:C.teal2})]
+      }),
+    ]
+  }]
+});
+
+Packer.toBuffer(doc).then(buf=>{
+  fs.writeFileSync("/mnt/user-data/outputs/GIS_Grade10_Guide_Final.docx",buf);
+  console.log("Done.");
+});
